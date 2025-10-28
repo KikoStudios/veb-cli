@@ -1,0 +1,26 @@
+OKEY WELCOME TO MY YAML scripting language guide
+this guide vill expand on the forming compatiblity as well as build the scripting one 
+
+NO1 
+ve split the froming into two parts 
+the runtime and install one 
+when you waht to write for startup you run 
+ask:install:
+but when runtime
+ask:runtime:
+that also corelates with the point that for the time being we are moving of the veb run comand for the testing and into veb vexp atest 
+where ve can do veb vexp atest wich goes trought both the asks and 
+than adding a --runtime or --install to do only one the both have shortened versions --r and --i 
+these changes also apply to run so run:unstall: run:runtime: 
+and the tags work the same but instead of veb vexp atest there is veb vexp rtest
+with that here we get to more aditions 
+the link comand dosent just add data now you can use it in the run part of the script to run stuff only if something has some value but also use the new in parameters in: allows you to run run: comands inside the ask ask: here is how it works
+you use the in: inside the run part like this
+  - run: "echo Hello, ${NAME}! Welcome to Veb."
+    in: [link_name], before
+like the parameters in the ask: part you have 2 option before and after these can be shortened to b or a but also to <(before) or >(after) 
+
+now ve also introduce 
+comenting !!! yayyyy :) okey but how 
+we use the standard // for one line coments but in our code you can just do /. and ./ to do multi line ones instead of the * like in diferent programing or scripting languages also coments work outside of the yaml formating standards so they dont have to be tabbed out or spaced they dont care 
+

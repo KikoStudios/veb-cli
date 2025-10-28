@@ -1,0 +1,34 @@
+{
+  "install": {
+    "usage": "veb install <target> [path=./...] [version=1.2] [headless=true]",
+    "description": "Install a module or project into the runtime.",
+    "options": {
+      "path": "Path to the project (default: current directory)",
+      "version": "Version to install",
+      "headless": "Run in headless mode"
+    }
+  },
+  "run": {
+    "usage": "veb run <target> [options]",
+    "description": "Run a previously installed project or module.",
+    "options": {
+      "env": "Environment variables or profile to use",
+      "watch": "Watch files and restart on changes"
+    }
+  },
+  "vexp": {
+    "usage": "veb vexp compile",
+    "description": "Commands for working with .vexp project manifests (compile, validate).",
+    "options": {
+      "compile": "Compile project.vexp.config into .vexp artifact"
+    }
+  },
+  "veb": {
+    "usage": "veb veb [command] | veb veb all",
+    "description": "Display help information for commands. Use 'all' to display full dictionary.",
+    "options": {
+      "all": "Show all help entries",
+      "<command>": "Show help for specific command"
+    }
+  }
+}

@@ -1,0 +1,47 @@
+Welcome to the Great yampl vexp parsing guid from KAO-OVERLOAD
+
+on the start of each file we write the project info >>
+name: test-project
+version: 1.0.0 //can just add a "b" before to mark it as beta so > version: b2.0.0
+type: tool //this is a important type we have tools funnels and apps in veb also there are hybrids
+author: the_great_test_dev
+contact: test@overload.studio //this one is optioal
+<< all of these parameters can be viewed by runing "veb vexp config"
+or veb vexp config --r for raw yaml 
+
+now lets proceed with the real part
+ask is your fully redundant part here you ask questions 
+the formationg look like this first var this is the variable avaliable to source the data from 
+than type we have a couple of types they all have a long and short from, w for write,yon for yesnot,di for defined,s for select 
+when you select the yes or not select or defined you can add the link variable this allows you to basicly get other forms dynamicly changing for example in the example we can see there is a link from the, "are you a human" question to the SPECIES question when you select that you are not a human the SPECIES question will be displayed if you say yes it wont.
+that also corelates with the di or defined you have a op: option this allows you to add parameters for the options as you se in the example mom dad ec. 
+this also wotks with s alias select 
+and can be linked 
+you set up link by the link option and conect using the bind option in the format bind: [link_id], [link_output]
+
+there are also icon option that allow characters and than coloring with chalk comands
+
+
+ask:
+  - var: HUMAN
+    type: yon
+    link: answer
+    icon: ☺, chalk.magenta()
+    question: "are you a human?"
+    default: Kiko
+  - var: SPECIES
+    bind: answer, False
+    type: w
+    icon: ƒ, chalk.blue()
+    question: "What are you?"
+    default:cat
+
+  - var: INSTALL
+    question: "Install for WHO?"
+    type: di
+    op: Mom; Dad; Brother; Sister
+    default: Mom
+
+run:
+  - run: echo Hello, ${NAME}! Welcome to Veb.
+  - run: echo Hey also why are you ${GENDER} what how does that even work.

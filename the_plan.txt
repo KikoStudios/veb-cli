@@ -1,0 +1,24 @@
+WELCOME TO THE PLAN 
+
+i have finised the basic philosophy of Veb so here it is 
+
+veb can be added as a compiler to any app just by addin project.vexp.config since it utilizes github as its main storage space and uses its db on convex to store aliases and the yaml configs for officiali published stuff
+
+so here is the core
+you use the comands
+veb
+veb install 
+to get the pacages 
+ you put them in this format 
+veb [git_url]
+veb install [git_url]
+that uses the git url to acces the repo and find and read the project.vexp.config
+thats how you can use veb without  publushing to the official pkg indedex 
+once you use the 
+veb [git_url] fromated comand it adds it to the alias index this means it dosent make it a pacage but you can run > veb git_usrname/project_name instead of having to paste in the whole link but both are options
+
+NEXT STEPS 
+
+1:
+A. conect to github and get the projcet.vexp.config fetch vorking 
+B. get the scripting part to work 
