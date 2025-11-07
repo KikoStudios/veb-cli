@@ -23,15 +23,18 @@ export async function execute(target, params) {
 
   console.log(chalk.cyan(`Running ${config.name || target}...`));
 
-  // Process the ask section
-  const processedQuestions = processAskSection(config.ask);
+  // Process the ask sections for both phases
+  const processedQuestions = processAskSection(config);
   
-  // Process the run section
-  const processedCommands = processRunSection(config.run);
+  // Process the run sections for both phases
+  const processedCommands = processRunSection(config);
 
-  // Store answers
+  // Store answers and track visible questions per phase
   const answers = {};
   const visibleQuestions = new Set();
+  
+  // Determine if we're running a specific phase
+  const phase = params.runtime ? 'runtime' : params.install ? 'install' : null;
 
   // First pass: determine which questions should be visible based on linking
   processedQuestions.forEach(q => {
@@ -153,25 +156,53 @@ export async function execute(target, params) {
     }
   }
 
-  // Execute commands
-  for (const command of processedCommands) {
-    const cmd = command.execute(answers);
-    console.log(chalk.gray(`→ ${cmd}`));
-    // Use stdio: 'pipe' to prevent duplicate output
-    const proc = spawn(cmd, { shell: true, stdio: ['inherit', 'pipe', 'pipe'] });
+  // Execute commands by phase
+  const executeCommands = async (commands, timing) => {
+    for (const command of commands) {
+      // Skip commands not matching the current phase (if specified)
+      if (phase && command.phase !== phase) continue;
+      
+      // Skip commands with wrong timing or missing link
+      if (timing && (!command.timing || command.timing !== timing)) continue;
+      
+      const cmd = command.execute(answers);
+      console.log(chalk.gray(`→ ${cmd}`));
+      
+      // Use stdio: 'pipe' to prevent duplicate output
+      const proc = spawn(cmd, { shell: true, stdio: ['inherit', 'pipe', 'pipe'] });
+      
+      // Manually handle stdout to avoid duplication
+      proc.stdout.on('data', (data) => {
+        process.stdout.write(data);
+      });
+      
+      // Handle stderr
+      proc.stderr.on('data', (data) => {
+        process.stderr.write(data);
+      });
+      
+      await new Promise((res) => proc.on("exit", res));
+    }
+  };
+  
+  // Execute commands in proper order with timing
+  for (const question of processedQuestions) {
+    // Run 'before' commands linked to this question
+    const beforeCommands = processedCommands.filter(cmd => 
+      cmd.linkName === question.linkId && cmd.timing === 'before'
+    );
+    await executeCommands(beforeCommands, 'before');
     
-    // Manually handle stdout to avoid duplication
-    proc.stdout.on('data', (data) => {
-      process.stdout.write(data);
-    });
-    
-    // Handle stderr
-    proc.stderr.on('data', (data) => {
-      process.stderr.write(data);
-    });
-    
-    await new Promise((res) => proc.on("exit", res));
+    // After the question is answered, run 'after' commands
+    const afterCommands = processedCommands.filter(cmd => 
+      cmd.linkName === question.linkId && cmd.timing === 'after'
+    );
+    await executeCommands(afterCommands, 'after');
   }
+  
+  // Run any remaining commands (no timing specified)
+  const untimed = processedCommands.filter(cmd => !cmd.timing);
+  await executeCommands(untimed);
 
   console.log(chalk.green("Run completed."));
 }

@@ -7,8 +7,9 @@ import * as install from "./commands/install.js";
 import * as run from "./commands/run.js";
 import * as vexp from "./commands/vexp.js";
 import * as veb from "./commands/veb_help.js";
+import * as creds from "./commands/creds.js";
 
-const commands = { install, run, vexp, veb };
+const commands = { install, run, vexp, veb, creds, cred: creds };
 
 function parseArgs() {
   // Keep argv tokens so we can detect standalone global tokens like `hl` or `help`
@@ -59,8 +60,9 @@ function parseArgs() {
   const args = tokens || [];
   command = args[0] || null;
 
-  // Walk remaining args and detect help tokens, key=val pairs, or the first non-help token as target
+  // Walk remaining args and detect help tokens, key=val pairs, or non-flag tokens
   let seenTarget = false;
+  let configFile = null;
   const helpTokens = new Set(["hl", "help"]);
   
   for (let i = 1; i < args.length; i++) {
@@ -87,7 +89,19 @@ function parseArgs() {
       continue;
     }
 
-    // first non-flag token becomes target
+    // For vexp test commands, second non-flag is config file
+    if (args[0] === 'vexp' && (args[1] === 'atest' || args[1] === 'rtest')) {
+      if (!seenTarget) {
+        target = t; // First non-flag is the subcommand (atest/rtest)
+        seenTarget = true;
+      } else if (!configFile) {
+        configFile = t; // Second non-flag is config file
+        params.configFile = t;
+      }
+      continue;
+    }
+
+    // For other commands, first non-flag is target
     if (!seenTarget) {
       target = t;
       seenTarget = true;
@@ -107,7 +121,7 @@ async function main() {
   if (!command) {
     console.log(chalk.yellow("Veb CLI"));
     console.log("Usage: veb <command> [target] [--global_flag]");
-    console.log("Commands: install, run, vexp");
+    console.log("Commands: install, run, vexp, creds");
     console.log("Global flags: --hl (help)");
     return;
   }
@@ -146,7 +160,14 @@ async function main() {
     return;
   }
 
-  await cmd.execute(target, params);
+    // For vexp test commands and validate, pass the config file from params
+  if (command === 'vexp' && (target === 'atest' || target === 'rtest' || target === 'validate')) {
+    const configFile = params.configFile;
+    delete params.configFile; // Remove it from params so it doesn't interfere with other flags
+    await cmd.execute(target, configFile, params);
+  } else {
+    await cmd.execute(target, params);
+  }
 }
 
 main();

@@ -9,10 +9,21 @@ import chalk from "chalk";
  * @param {string} filePath - Path to the VEXP config file
  * @returns {Object} Parsed config
  */
+function removeComments(content) {
+  // Remove single-line comments (//)
+  content = content.replace(/\/\/[^\n]*/g, '');
+  
+  // Remove multi-line comments (/. ./)
+  content = content.replace(/\/\.([\s\S]*?)\.\//g, '');
+  
+  return content;
+}
+
 export async function parseVexpConfig(filePath) {
   try {
     const content = await fs.readFile(filePath, "utf8");
-    return YAML.parse(content);
+    const cleaned = removeComments(content);
+    return YAML.parse(cleaned);
   } catch (err) {
     console.error(chalk.red(`Error parsing VEXP config: ${err.message}`));
     return null;
@@ -143,7 +154,10 @@ export function parseQuestionType(question) {
   
   // Process binding
   if (question.bind) {
-    const bindParts = question.bind.split(",").map(part => part.trim());
+    // Support both old comma format and new semicolon format
+    const bindParts = question.bind.includes(";") ? 
+      question.bind.split(";").map(part => part.trim()) :
+      question.bind.split(",").map(part => part.trim());
     if (bindParts.length >= 2) {
       result.bindToLink = bindParts[0];
       const rhs = bindParts[1];
@@ -169,10 +183,19 @@ export function parseQuestionType(question) {
  * @param {Array} askSection - The ask section from the config
  * @returns {Array} Processed questions
  */
-export function processAskSection(askSection) {
-  if (!askSection || !Array.isArray(askSection)) return [];
+export function processAskSection(config) {
+  // Get install and runtime sections from the new format
+  const installQuestions = (config?.['ask:install'] || []).map(q => ({
+    ...parseQuestionType(q),
+    phase: 'install'
+  }));
   
-  const processedQuestions = askSection.map(question => parseQuestionType(question));
+  const runtimeQuestions = (config?.['ask:runtime'] || []).map(q => ({
+    ...parseQuestionType(q),
+    phase: 'runtime'
+  }));
+  
+  const processedQuestions = [...installQuestions, ...runtimeQuestions];
   
   // Process linking relationships
   processedQuestions.forEach(question => {
@@ -187,7 +210,7 @@ export function processAskSection(askSection) {
         variableName: q.variableName,
         bindValue: q.bindValue,
         bindValueIndex: q.bindValueIndex,
-        // When binding by index, we compare against the index of selected option(s)
+        phase: q.phase
       }));
     }
   });
@@ -200,36 +223,187 @@ export function processAskSection(askSection) {
  * @param {Array} runSection - The run section from the config
  * @returns {Array} Processed run commands
  */
-export function processRunSection(runSection) {
-  if (!runSection || !Array.isArray(runSection)) return [];
+export function processRunSection(config) {
+  // Debug the incoming config structure
+  console.log(chalk.gray('Processing run sections:'));
+  console.log(chalk.gray('- Install commands:', config?.['run:install']?.length || 0));
+  console.log(chalk.gray('- Runtime commands:', config?.['run:runtime']?.length || 0));
   
-  return runSection.map(item => {
-    const command = typeof item === 'string' ? item : item.run;
+  // Get install and runtime sections from the new format
+  const installCommands = (config?.['run:install'] || []).map(cmd => {
+    if (typeof cmd === 'string') return { run: cmd, phase: 'install' };
+    return { ...cmd, phase: 'install' };
+  });
+  
+  const runtimeCommands = (config?.['run:runtime'] || []).map(cmd => {
+    if (typeof cmd === 'string') return { run: cmd, phase: 'runtime' };
+    return { ...cmd, phase: 'runtime' };
+  });
+  
+  const allCommands = [...installCommands, ...runtimeCommands];
+  console.log(chalk.gray('Total commands found:', allCommands.length));
+  
+  // Group commands by order blocks (marked with -run:)
+  let currentGroup = [];
+  const processed = [];
+  
+  allCommands.forEach(item => {
+    // Handle both string commands and object commands with run property
+    if (!item) return;
     
-    // Extract variables from the command
-    const variableRegex = /\${([^}]+)}/g;
-    const variables = [];
-    let match;
+    // Process the command value
+    let command = '';
+    let isHead = false;
+    let shellType = item.type || 'default';
     
-    while ((match = variableRegex.exec(command)) !== null) {
-      variables.push(match[1]);
+    // Normalize shell type
+    shellType = shellType.toLowerCase();
+    if (['pw', 'power-shell'].includes(shellType)) {
+      shellType = 'powershell';
+    } else if (['cmd', 'command-prompt'].includes(shellType)) {
+      shellType = 'cmd';
     }
     
-    return {
-      command,
-      variables,
-      // Function to substitute variables with values
+    if (typeof item === 'string') {
+      command = item;
+      isHead = item.startsWith('-');
+    } else if (typeof item === 'object') {
+      if (item.run) {
+        command = item.run;
+        isHead = command.startsWith('-');
+      } else if (item.see) {
+        // Handle see command with chalk styling
+        const parts = Array.isArray(item.see) ? item.see : [item.see];
+        command = parts.map(part => {
+          const [text, style] = part.split(';').map(p => p.trim());
+          if (style && style.startsWith('chalk.')) {
+            const funcName = style.substring(6, style.indexOf('('));
+            if (chalk[funcName]) {
+              return `echo "${chalk[funcName](text)}"`;
+            }
+          }
+          return `echo "${text}"`;
+        }).join(' && ');
+      } else if (item.text) {
+        // Handle text editing command
+        const [content, filePath] = item.text.split(';').map(p => p.trim());
+        let targetPath = filePath;
+        if (filePath.includes('+')) {
+          targetPath = filePath.split('+').map(p => p.trim()).join('/');
+        }
+        targetPath = targetPath.replace('${veb.app_path}', '.');
+
+        let textCommand = '';
+        if (item.search && item.replace) {
+          // Replace mode
+          textCommand = `sed -i 's/${item.search}/${item.replace}/g' "${targetPath}"`;
+        } else {
+          // Insert mode
+          let linePos = '';
+          if (item.line) {
+            const lineSpec = item.line.toLowerCase();
+            if (lineSpec.includes('same.after')) {
+              linePos = ''; // Append after found line
+            } else if (lineSpec.includes('same.before')) {
+              linePos = 'i'; // Insert before found line
+            } else {
+              const match = lineSpec.match(/([+-]\d+)\.(before|after)/);
+              if (match) {
+                const [_, offset, pos] = match;
+                linePos = pos === 'before' ? `${offset}i` : `${offset}a`;
+              } else if (!isNaN(lineSpec)) {
+                linePos = `${lineSpec}`;
+              }
+            }
+          }
+
+          if (item.search) {
+            // Insert relative to search
+            textCommand = `sed -i '/${item.search}/${linePos}${content}/' "${targetPath}"`;
+          } else {
+            // Insert at specific line or end of file
+            if (linePos) {
+              textCommand = `sed -i '${linePos}${content}' "${targetPath}"`;
+            } else {
+              textCommand = `echo "${content}" >> "${targetPath}"`;
+            }
+          }
+        }
+        command = textCommand;
+      } else {
+        return; // Skip invalid commands
+      }
+    } else {
+      return; // Skip invalid commands
+    }
+    
+    // Process in: parameter for command timing
+    let timing = null;
+    let linkName = null;
+    
+    if (item.in && typeof item.in === 'string') {
+      const [link, time] = item.in.split(';').map(part => part.trim());
+      linkName = link;
+      // Support multiple timing syntaxes (before/b/<) and (after/a/>)
+      timing = time.startsWith('<') || time === 'before' || time === 'b' ? 'before' : 'after';
+    }
+    
+    const processedCommand = {
+      command: command.replace(/^-/, ''), // Remove leading - if present
+      phase: item.phase || (typeof item === 'object' ? item.phase : null),
+      timing,
+      linkName,
+      shellType,
+      variables: [],
+      original: item, // Keep original for reference
+      // Extract variables from the command
+      variableRegex: /\${([^}]+)}/g,
       execute: (values) => {
-        let result = command;
-        variables.forEach(variable => {
-          if (values[variable] !== undefined) {
+        let result = command.replace(/^-/, '');
+        
+        // Handle git.get() commands
+        if (result.trim().startsWith('git.get')) {
+          const gitMatch = result.match(/git\.get\((.*?)\)/);
+          if (gitMatch) {
+            const filePath = gitMatch[1].replace(/['"]/g, '').trim();
+            result = `git clone ${filePath ? '-n --depth 1 --filter=blob:none --sparse' : ''} ${process.env.REPO_URL || ''} && ` +
+                    (filePath ? `cd $(basename ${process.env.REPO_URL}) && git sparse-checkout set ${filePath}` : '');
+          }
+        }
+        
+        // Replace variables including veb.app_path
+        let match;
+        const regex = /\${([^}]+)}/g;
+        while ((match = regex.exec(result)) !== null) {
+          const variable = match[1];
+          if (variable === 'veb.app_path') {
+            result = result.replace('${veb.app_path}', process.env.VEB_APP_PATH || '.');
+          } else if (values[variable] !== undefined) {
             const v = values[variable];
             const asText = Array.isArray(v) ? v.join(", ") : String(v);
             result = result.replace(`\${${variable}}`, asText);
           }
-        });
+        }
         return result;
       }
     };
+    
+    if (isHead) {
+      if (currentGroup.length > 0) {
+        processed.push(...currentGroup);
+      }
+      currentGroup = [processedCommand];
+    } else if (currentGroup.length > 0) {
+      currentGroup.push(processedCommand);
+    } else {
+      processed.push(processedCommand);
+    }
   });
+  
+  // Add any remaining grouped commands
+  if (currentGroup.length > 0) {
+    processed.push(...currentGroup);
+  }
+  
+  return processed;
 }

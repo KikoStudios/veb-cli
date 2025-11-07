@@ -17,10 +17,102 @@ with that here we get to more aditions
 the link comand dosent just add data now you can use it in the run part of the script to run stuff only if something has some value but also use the new in parameters in: allows you to run run: comands inside the ask ask: here is how it works
 you use the in: inside the run part like this
   - run: "echo Hello, ${NAME}! Welcome to Veb."
-    in: [link_name], before
-like the parameters in the ask: part you have 2 option before and after these can be shortened to b or a but also to <(before) or >(after) 
+    in: "link_name; before"
+like the parameters in the ask: part you have 2 options before and after these can be shortened to b or a but also to <(before) or >(after). The format is "link_name; before" or "link_name; after" where the link name and timing are separated by a semicolon.
 
 now ve also introduce 
 comenting !!! yayyyy :) okey but how 
 we use the standard // for one line coments but in our code you can just do /. and ./ to do multi line ones instead of the * like in diferent programing or scripting languages also coments work outside of the yaml formating standards so they dont have to be tabbed out or spaced they dont care 
 
+now lets continue 
+when you want to in: link more than one comand to one question in ask you do it by placing a "-" before the run sintax this signals that that run is the head and all other run comands untill the next next "-" run in the order they are writen 
+  - -run: "echo Hello, ${NAME}! Welcome to Veb."// start order 1
+    in: [link_name], before
+  - run: "echo Hello, ${NAME}! Welcome to Veb."
+    in: [link_name], before
+  - run: "echo Hello, ${NAME}! Welcome to Veb."
+    in: [link_name], before
+  - -run: "echo Hello, ${NAME}! Welcome to Veb."//end order 1
+    in: [link_name], before
+  - -run: "echo Hello, ${NAME}! Welcome to Veb."//order 2
+    in: [link_name], before
+  - run: "echo Hello, ${NAME}! Welcome to Veb."
+    in: [link_name], before
+  - -run: "echo Hello, ${NAME}! Welcome to Veb."//end order 2
+    in: [link_name], before
+  - run: "echo Hello, ${NAME}! Welcome to Veb."
+    in: [link_name], before
+in the example here we can see that there are a lot of comands in the first one we mark it as a head and untill the next head they run in order , the end of the order runs as well in the order
+right after that we start the second order 
+and than it ends 
+but ofter that we have a comand that dosent have a head the comands can be also run separetly with no wrappers
+even thought they are in a loop they parameters like bind: and in: are separate and fully functional
+
+NO2
+this is volume two of adding features to the vexp yaml scripting 
+here we go ! 
+
+in the final project there will be a github repo attached to this that means it needs to manipulate and acces it somehow
+tats why in the run section we add the
+
+  - run: git.get() //gets the whole repo 
+  - run: git.get("[specific_file in repo]) //gets one file in the repo via path so package.json or scr/cli.json if you catch my drift 
+
+  this is interconected with the
+ ${veb.app_path} variable wich points to the place where the thing is getting installed 
+
+ instead of running echo you run see
+   - see: "something; chalk.purple"
+see can be chained for other chalk styling
+   - see: "something; chalk.purple"; "something else, chalk.red"
+now runing run: is still useful for all the setup task but sometimes you need power shell or cmd 
+you can roll between these using the type: option 
+   - run: "cd scr/my_dir"
+     type: pw    // can be replaced with power-shell(pw the same thing) or cmd(also command-prompt thesame thing)
+
+all of these have the bind: and also in: options avaliable  
+
+Here are some examples of using the text command:
+
+  - text: "const myFunction = () => {};; ${veb.app_path}+src/functions.js"
+    search: "// Add functions here"
+    line: same.after
+
+  - text: "import logger from './utils/logger';; ${veb.app_path}+src/index.js"
+    line: "+1"  // Add at line 1
+
+  - text: "  console.log('Debug info');; ${veb.app_path}+src/cli.js"
+    search: "function processCommand"
+    line: "+2.after"  // Add 2 lines after the search match
+
+  - text: "module.exports = router;; ${veb.app_path}+src/routes.js"
+    line: same  // Add at current line
+
+  - text: "app.use('/api', router);; ${veb.app_path}+src/app.js"
+    search: "const app = express()"
+    line: "+3.after"
+
+  // Replace examples
+  - text: "newConfig.port = 3000;; ${veb.app_path}+config.js"
+    search: "config.port = 8080"
+    replace: "config.port = 3000"
+
+NO3
+now with the acces to the comand prompt you can already do a bounch 
+but to make editing files easier we are ading 
+
+   - text: "hello world; ${veb.app_path}+scr/file.txt"
+     search: "add you text here:"
+     line: same.after // can also be used like -1.before or +1.after 
+
+this allows for thext editing easeli search parameter allows you to find a specific part in the text 
+and line allows you to even in a new file add lines wich means if the file is empty you can just for the line: write +3 or same no -9 minus stuf just leaves -x empty lines after the text you wrote in a empty file 
+
+also there is a replace: option that you can replace the search one with and it works exactly like youd expect 
+
+NO4
+
+validation 
+
+validation is a big point of the scripting language it can be activated by runing veb vexp validate [file name]
+this isnt your avrage validation it goes trought your whole file and validates every expresion if it is real if there is a possibility of a screwup it will tell you about it make yourself useful and find a way to make this crazy intense and cool also make it run the files in the bg and get all the error data run it in parts to valideta allo of it and than give a report with what to improve and what is cool if the file is perfect it returnes a full score yea it work in a scroing system 100 points max 

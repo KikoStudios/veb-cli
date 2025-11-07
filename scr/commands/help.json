@@ -1,34 +1,157 @@
 {
-  "install": {
-    "usage": "veb install <target> [path=./...] [version=1.2] [headless=true]",
-    "description": "Install a module or project into the runtime.",
-    "options": {
-      "path": "Path to the project (default: current directory)",
-      "version": "Version to install",
-      "headless": "Run in headless mode"
-    }
-  },
-  "run": {
-    "usage": "veb run <target> [options]",
-    "description": "Run a previously installed project or module.",
-    "options": {
-      "env": "Environment variables or profile to use",
-      "watch": "Watch files and restart on changes"
+  "main": {
+    "creds": {
+      "usage": "veb creds <command>",
+      "description": "Manage VEB account credentials and authentication.",
+      "options": {
+        "login": "Login to existing VEB account",
+        "register": "Create a new VEB account",
+        "logout": "Logout from current account",
+        "status": "Show current account status",
+        "--hl": "Show detailed help with examples"
+      },
+      "examples": {
+        "login": "veb creds login",
+        "register": "veb creds register",
+        "status": "veb creds status"
+      }
+    },
+    "install": {
+      "usage": "veb install <target> [path=./...] [version=1.2] [headless=true]",
+      "description": "Install a module or project into the runtime.",
+      "options": {
+        "path": "Path to the project (default: current directory)",
+        "version": "Version to install",
+        "headless": "Run in headless mode",
+        "--hl": "Show detailed help with examples"
+      }
+    },
+    "run": {
+      "usage": "veb run <target> [options]",
+      "description": "Run a previously installed project or module.",
+      "options": {
+        "env": "Environment variables or profile to use",
+        "watch": "Watch files and restart on changes",
+        "--runtime, --r": "Run only runtime phase",
+        "--install, --i": "Run only install phase",
+        "--hl": "Show detailed help with examples"
+      }
+    },
+    "veb": {
+      "usage": "veb veb [command] | veb veb all",
+      "description": "Display help information for commands. Use 'all' to display full dictionary.",
+      "options": {
+        "all": "Show all help entries",
+        "<command>": "Show help for specific command",
+        "--hl": "Show detailed help for a command"
+      }
     }
   },
   "vexp": {
-    "usage": "veb vexp compile",
-    "description": "Commands for working with .vexp project manifests (compile, validate).",
-    "options": {
-      "compile": "Compile project.vexp.config into .vexp artifact"
+    "description": "Commands for working with VEXP project manifests.",
+    "validate": {
+      "usage": "veb vexp validate [file]",
+      "description": "Run comprehensive validation on a VEXP configuration file.",
+      "options": {
+        "file": "Path to the VEXP config file (default: project.vexp.config)",
+        "--verbose": "Show detailed validation information",
+        "--fix": "Attempt to fix common issues",
+        "--hl": "Show detailed help including scoring information"
+      },
+      "scoring": {
+        "syntax": "30 points - YAML structure and required fields",
+        "linking": "20 points - Link and bind relationships",
+        "commands": "20 points - Command validity and structure",
+        "paths": "15 points - File paths and references",
+        "dependencies": "15 points - Dependencies and requirements"
+      }
+    },
+    "atest": {
+      "usage": "veb vexp atest <config-file> [--runtime/--r | --install/--i]",
+      "description": "Test ask sections in a VEXP configuration file.",
+      "options": {
+        "--runtime, --r": "Test only runtime phase questions",
+        "--install, --i": "Test only install phase questions",
+        "config-file": "Path to the VEXP config file",
+        "--hl": "Show detailed help with examples"
+      }
+    },
+    "rtest": {
+      "usage": "veb vexp rtest <config-file> [--runtime/--r | --install/--i]",
+      "description": "Test run sections in a VEXP configuration file.",
+      "options": {
+        "--runtime, --r": "Test only runtime phase commands",
+        "--install, --i": "Test only install phase commands",
+        "config-file": "Path to the VEXP config file",
+        "--hl": "Show detailed help with examples"
+      }
+    },
+    "compile": {
+      "usage": "veb vexp compile [config-file]",
+      "description": "Compile a VEXP configuration into a .vexp artifact.",
+      "options": {
+        "config-file": "Path to the VEXP config file (default: project.vexp.config)",
+        "--hl": "Show detailed help with examples"
+      }
     }
   },
-  "veb": {
-    "usage": "veb veb [command] | veb veb all",
-    "description": "Display help information for commands. Use 'all' to display full dictionary.",
-    "options": {
-      "all": "Show all help entries",
-      "<command>": "Show help for specific command"
+  "yaml": {
+    "description": "YAML configuration commands and syntax.",
+    "text": {
+      "usage": "text: \"content; path\" [options]",
+      "description": "Add or modify text in files with precise control.",
+      "options": {
+        "search": "Text to search for in the file",
+        "line": "Line positioning (same.after, +n.after, -n.before)",
+        "replace": "Text to replace the search match with",
+        "--hl": "Show detailed help with examples"
+      },
+      "examples": {
+        "add": "text: \"const myFunc = () => {}; ${veb.app_path}+src/func.js\"",
+        "insert": "text: \"import logger; src/index.js\"\nline: \"+1\"",
+        "replace": "text: \"port = 3000; config.js\"\nsearch: \"port = 8080\"\nreplace: \"port = 3000\""
+      }
+    },
+    "see": {
+      "usage": "see: \"text; style\" [chained-sees]",
+      "description": "Output styled text using chalk colors.",
+      "options": {
+        "style": "chalk color function (e.g., chalk.red, chalk.blue)",
+        "chained-sees": "Multiple see commands separated by semicolons",
+        "--hl": "Show detailed help with examples"
+      },
+      "examples": {
+        "single": "see: \"Error occurred; chalk.red\"",
+        "chained": "see: \"Success; chalk.green\"; \"Warning; chalk.yellow\""
+      }
+    },
+    "git.get": {
+      "usage": "git.get([file])",
+      "description": "Fetch repository content from GitHub.",
+      "options": {
+        "file": "Optional specific file to fetch from repo",
+        "--hl": "Show detailed help with examples"
+      },
+      "examples": {
+        "full": "git.get()",
+        "single": "git.get(\"package.json\")"
+      }
+    },
+    "run": {
+      "usage": "run: \"command\" [type]",
+      "description": "Execute shell commands with specified shell type.",
+      "options": {
+        "type": "Shell type (pw/power-shell, cmd/command-prompt)",
+        "bind": "Bind execution to a link value",
+        "in": "Execute before/after a linked question",
+        "--hl": "Show detailed help with examples"
+      },
+      "examples": {
+        "powershell": "run: \"Get-Process\"\ntype: pw",
+        "cmd": "run: \"dir\"\ntype: cmd",
+        "binding": "run: \"echo ${VALUE}\"\nbind: \"answer; True\"",
+        "timing": "run: \"echo Ready\"\nin: \"question; before\""
+      }
     }
   }
 }

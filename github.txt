@@ -1,0 +1,7 @@
+KAOS crazy IDEA 
+
+okey so the point is this 
+VEB will have a pacage index containgin the project.vexp.configs of a lot of projects these will be published to convex but to publish them there you need to get your account registred and verified so it works like this 
+all project files are saved in a github repo now you can clone and run the projects by runing veb, veb install and than veb run with the github url behind it it will find the repo and get the vexp config but once you do that once no  registration needed it will go the the convex alias db this db gets the usrname and reponame on the first fetch using veb so than you dont have to put the whole  url there but you can just do veb yourname/yourrepo very easeli 
+now the second thing is the registred db this is a way to fully publish pacages to veb index you write the veb cred comand it gives you a option to login or create account in login you can just password username/email and than give the authenticator app numbers, inthe register you do display name, tagname(the login username), password( twice), mail than you get a verification mail sent via the resent api and apss in the verifiaction numbers once you do that you get a qr and a string of numbers in the terminal this you scan or put into any authenticator app that gens the codes and allows you to login and verifiy yourself 
+once you do that your auth is saved safely in the veb files you can log in add acount and mouch more in the ceb cred menu but you can also do veb pulse publish wich publishes the project to  VebPulse wich is the rep 
