@@ -6,11 +6,7 @@ import { api } from "../../convex/_generated/api.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
-import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
-
-const ROOT_DIR = fileURLToPath(new URL("../../", import.meta.url));
-const ENV_FILES = [".env", ".env_local"];
+import { ensureEnvLoaded, requireEnv } from "../utils/env.js";
 
 function normalizeOptions(params = {}) {
   return Object.entries(params).reduce((acc, [key, value]) => {
@@ -86,58 +82,8 @@ function createAutomatedAccount(options) {
   };
 }
 
-function loadEnvFile(filename) {
-  const filePath = resolve(ROOT_DIR, filename);
-  if (!existsSync(filePath)) {
-    return;
-  }
-
-  const contents = readFileSync(filePath, "utf8");
-  for (const line of contents.split(/\r?\n/)) {
-    if (!line || line.trim().startsWith("#")) {
-      continue;
-    }
-    const idx = line.indexOf("=");
-    if (idx === -1) {
-      continue;
-    }
-    const key = line.slice(0, idx).trim();
-    if (!key || key.startsWith("#")) {
-      continue;
-    }
-    if (process.env[key] !== undefined) {
-      continue;
-    }
-    const value = line.slice(idx + 1).trim().replace(/^['"]|['"]$/g, "");
-    process.env[key] = value;
-  }
-}
-
-ENV_FILES.forEach(loadEnvFile);
-
-if (!process.env.CONVEX_URL) {
-  try {
-    const child = spawnSync(process.execPath, ["-e", "require('dotenv').config()"], {
-      cwd: ROOT_DIR,
-      stdio: "ignore",
-      env: {
-        ...process.env,
-      },
-    });
-    if (child.status === 0) {
-      // The child process cannot mutate our env, but running dotenv here gives users a hint.
-    }
-  } catch (error) {
-    // Ignore missing dotenv; env is already handled by our loader.
-  }
-}
-
-const convexUrl = process.env.CONVEX_URL;
-
-if (!convexUrl) {
-  throw new Error("CONVEX_URL environment variable is not set");
-}
-
+ensureEnvLoaded();
+const convexUrl = requireEnv("CONVEX_URL");
 const client = new ConvexHttpClient(convexUrl);
 
 function getConfigPath() {

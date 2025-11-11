@@ -1,0 +1,13 @@
+HEY this is the basic way and explanation how the cli should work 
+
+you run veb [url, alias, package]
+it installs and than runs
+you run veb install [url, alias, package] it only installs 
+and you run veb run [url, alias, package] it only runs 
+these settinhs mean how the code is executed and wich parts of the config are run 
+
+when you run the veb [url, alias, package] or veb install [url, alias, package] the first thing the cli does before downloading the repo is is getting the project.vexp.config by itself
+the config dictates the flow you can add ${bi.REPO_URL} bi means built in wich means it provides the url from the comand the alias db or the actual db
+that is the first addition to the scripting language the nex one is the run comands can have a os tag run:install:macos or run:install:win11 or run:install:arch or run:install:fedora40 
+than veb checks the os and associates it if the os is not correct it says os not compatible 
+as i said befor the config dictates it all it can get the whole repo or just some files all depends on the config 

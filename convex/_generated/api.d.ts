@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as aliases from "../aliases.js";
 import type * as auth from "../auth.js";
 import type * as customBase32 from "../customBase32.js";
 import type * as emailVerification from "../emailVerification.js";
@@ -30,6 +31,7 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  aliases: typeof aliases;
   auth: typeof auth;
   customBase32: typeof customBase32;
   emailVerification: typeof emailVerification;

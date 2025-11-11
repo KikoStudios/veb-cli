@@ -23,7 +23,17 @@ export async function parseVexpConfig(filePath) {
   try {
     const content = await fs.readFile(filePath, "utf8");
     const cleaned = removeComments(content);
-    return YAML.parse(cleaned);
+    const config = YAML.parse(cleaned);
+    
+    if (config.dependencies && !Array.isArray(config.dependencies)) {
+      if (typeof config.dependencies === "string") {
+        config.dependencies = config.dependencies.split(",").map(d => d.trim());
+      } else {
+        config.dependencies = [];
+      }
+    }
+    
+    return config;
   } catch (err) {
     console.error(chalk.red(`Error parsing VEXP config: ${err.message}`));
     return null;
@@ -223,31 +233,70 @@ export function processAskSection(config) {
  * @param {Array} runSection - The run section from the config
  * @returns {Array} Processed run commands
  */
-export function processRunSection(config) {
-  // Debug the incoming config structure
-  console.log(chalk.gray('Processing run sections:'));
-  console.log(chalk.gray('- Install commands:', config?.['run:install']?.length || 0));
-  console.log(chalk.gray('- Runtime commands:', config?.['run:runtime']?.length || 0));
+export function processRunSection(config, currentOS = null) {
+  // Collect all run sections including OS-specific ones
+  const runSections = Object.keys(config || {}).filter(key => key.startsWith('run:'));
   
-  // Get install and runtime sections from the new format
-  const installCommands = (config?.['run:install'] || []).map(cmd => {
-    if (typeof cmd === 'string') return { run: cmd, phase: 'install' };
-    return { ...cmd, phase: 'install' };
+  const allCommands = [];
+  const osSpecificCommands = [];
+  const genericCommands = [];
+  
+  runSections.forEach(sectionKey => {
+    const commands = config[sectionKey] || [];
+    const parts = sectionKey.split(':');
+    const phase = parts[1] || 'install';
+    const osTag = parts.length > 2 ? parts.slice(2).join(':') : null;
+    
+    commands.forEach(cmd => {
+      const commandObj = typeof cmd === 'string' 
+        ? { run: cmd, phase, osTag, sectionKey }
+        : { ...cmd, phase, osTag, sectionKey };
+      
+      allCommands.push(commandObj);
+      
+      if (osTag) {
+        osSpecificCommands.push(commandObj);
+      } else {
+        genericCommands.push(commandObj);
+      }
+    });
   });
   
-  const runtimeCommands = (config?.['run:runtime'] || []).map(cmd => {
-    if (typeof cmd === 'string') return { run: cmd, phase: 'runtime' };
-    return { ...cmd, phase: 'runtime' };
-  });
+  // Filter by OS if currentOS is provided
+  let filteredCommands = allCommands;
+  if (currentOS) {
+    // Find OS-specific commands for current OS
+    const matchingOSSpecific = osSpecificCommands.filter(cmd => {
+      return cmd.osTag === currentOS || cmd.osTag.startsWith(currentOS);
+    });
+    
+    if (matchingOSSpecific.length > 0) {
+      // Use only OS-specific commands, exclude generic ones
+      filteredCommands = matchingOSSpecific;
+      console.log(chalk.gray(`Using OS-specific commands for ${currentOS} (${filteredCommands.length} commands)`));
+    } else {
+      // Check if any OS-specific commands exist at all
+      if (osSpecificCommands.length > 0) {
+        // OS-specific commands exist but none match current OS
+        const availableOS = [...new Set(osSpecificCommands.map(c => c.osTag).filter(Boolean))];
+        throw new Error(`OS not compatible. This project requires: ${availableOS.join(', ')}`);
+      }
+      // No OS-specific commands, use generic ones
+      filteredCommands = genericCommands;
+      console.log(chalk.gray(`Using generic commands (${filteredCommands.length} commands)`));
+    }
+  } else {
+    // No OS detection, use all commands
+    filteredCommands = allCommands;
+  }
   
-  const allCommands = [...installCommands, ...runtimeCommands];
-  console.log(chalk.gray('Total commands found:', allCommands.length));
+  console.log(chalk.gray(`Processing ${filteredCommands.length} commands${currentOS ? ` for ${currentOS}` : ''}...`));
   
   // Group commands by order blocks (marked with -run:)
   let currentGroup = [];
   const processed = [];
   
-  allCommands.forEach(item => {
+  filteredCommands.forEach(item => {
     // Handle both string commands and object commands with run property
     if (!item) return;
     
@@ -358,7 +407,7 @@ export function processRunSection(config) {
       original: item, // Keep original for reference
       // Extract variables from the command
       variableRegex: /\${([^}]+)}/g,
-      execute: (values) => {
+      execute: (values, builtIns = {}) => {
         let result = command.replace(/^-/, '');
         
         // Handle git.get() commands
@@ -366,17 +415,27 @@ export function processRunSection(config) {
           const gitMatch = result.match(/git\.get\((.*?)\)/);
           if (gitMatch) {
             const filePath = gitMatch[1].replace(/['"]/g, '').trim();
-            result = `git clone ${filePath ? '-n --depth 1 --filter=blob:none --sparse' : ''} ${process.env.REPO_URL || ''} && ` +
-                    (filePath ? `cd $(basename ${process.env.REPO_URL}) && git sparse-checkout set ${filePath}` : '');
+            const repoUrl = builtIns.REPO_URL || process.env.REPO_URL || '';
+            result = `git clone ${filePath ? '-n --depth 1 --filter=blob:none --sparse' : ''} ${repoUrl} && ` +
+                    (filePath ? `cd $(basename ${repoUrl}) && git sparse-checkout set ${filePath}` : '');
           }
         }
         
-        // Replace variables including veb.app_path
+        // Replace variables including built-in (bi.*) and veb.app_path
         let match;
         const regex = /\${([^}]+)}/g;
         while ((match = regex.exec(result)) !== null) {
           const variable = match[1];
-          if (variable === 'veb.app_path') {
+          
+          // Handle built-in variables (bi.*)
+          if (variable.startsWith('bi.')) {
+            const biVar = variable.substring(3);
+            if (builtIns[biVar] !== undefined) {
+              result = result.replace(`\${${variable}}`, builtIns[biVar]);
+            } else if (process.env[biVar]) {
+              result = result.replace(`\${${variable}}`, process.env[biVar]);
+            }
+          } else if (variable === 'veb.app_path') {
             result = result.replace('${veb.app_path}', process.env.VEB_APP_PATH || '.');
           } else if (values[variable] !== undefined) {
             const v = values[variable];

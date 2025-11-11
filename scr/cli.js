@@ -8,8 +8,9 @@ import * as run from "./commands/run.js";
 import * as vexp from "./commands/vexp.js";
 import * as veb from "./commands/veb_help.js";
 import * as creds from "./commands/creds.js";
+import * as processes from "./commands/processes.js";
 
-const commands = { install, run, vexp, veb, creds, cred: creds };
+const commands = { install, run, vexp, veb, creds, cred: creds, processes, ps: processes };
 
 function parseArgs() {
   // Keep argv tokens so we can detect standalone global tokens like `hl` or `help`
@@ -121,13 +122,38 @@ async function main() {
   if (!command) {
     console.log(chalk.yellow("Veb CLI"));
     console.log("Usage: veb <command> [target] [--global_flag]");
-    console.log("Commands: install, run, vexp, creds");
+    console.log("Commands: install, run, vexp, creds, processes");
     console.log("Global flags: --hl (help)");
+    console.log(chalk.gray("\nYou can also use aliases directly: veb username/repo"));
     return;
   }
 
   const cmd = commands[command];
   if (!cmd) {
+    if (command.includes("/") || command.startsWith("http") || command.startsWith("git@")) {
+      const target = command;
+      const installCmd = commands.install;
+      const runCmd = commands.run;
+      if (installCmd && runCmd) {
+        // If the project is already present locally, skip install and run only
+        try {
+          const { dir } = await runCmd.findProjectDir(target);
+          if (dir) {
+            console.log(chalk.blue(`🔁 Found existing install at ${dir} — skipping install, running runtime...`));
+            await runCmd.execute(target, { ...params, install: false });
+            return;
+          }
+        } catch (e) {
+          // If detection fails, fall back to install+run
+          console.log(chalk.yellow(`Could not determine local install state: ${e.message || e}`));
+        }
+
+        console.log(chalk.blue(`🚀 Installing and running ${target}...`));
+        await installCmd.execute(target, params);
+        await runCmd.execute(target, { ...params, install: false });
+        return;
+      }
+    }
     console.log(chalk.red(`Unknown command: ${command}`));
     return;
   }

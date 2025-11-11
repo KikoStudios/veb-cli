@@ -1,0 +1,14 @@
+name: veb-run-test
+version: 1.0
+run:
+  - run: "echo What is your name?"
+    interact: "What is your name?;John Doe"
+    term: "test-session"
+    type: "powershell"
+  - run: "echo Do you want to continue?"
+    interact: "Do you want to continue?;y"
+    term: "test-session"
+    type: "powershell"
+  - run: "echo Finished!"
+    term: "test-session"
+    type: "powershell"

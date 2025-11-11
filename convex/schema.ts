@@ -37,4 +37,13 @@ export default defineSchema({
   })
     .index("by_tagName", ["tagName"])
     .index("by_email", ["email"]),
+
+  aliases: defineTable({
+    alias: v.string(),
+    repoUrl: v.string(),
+    createdAt: v.number(),
+    lastUsedAt: v.number(),
+  })
+    .index("by_alias", ["alias"])
+    .index("by_repoUrl", ["repoUrl"]),
 });
