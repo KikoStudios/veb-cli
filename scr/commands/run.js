@@ -10,30 +10,10 @@ import { api } from "../../convex/_generated/api.js";
 import { parseVexpConfig, processAskSection, processRunSection } from "../utils/vexp-parser.js";
 import { detectOS } from "../utils/os-detector.js";
 import { registerProcess, updateProcess } from "../utils/runtime-manager.js";
-
+import { requireEnv } from "../utils/env.js";
 const ROOT_DIR = fileURLToPath(new URL("../../", import.meta.url));
 
-function loadEnvFile(filename) {
-  const filePath = path.resolve(ROOT_DIR, filename);
-  if (!existsSync(filePath)) {
-    return;
-  }
-  const contents = fs.readFileSync(filePath, "utf8");
-  for (const line of contents.split(/\r?\n/)) {
-    if (!line || line.trim().startsWith("#")) continue;
-    const idx = line.indexOf("=");
-    if (idx === -1) continue;
-    const key = line.slice(0, idx).trim();
-    if (!key || key.startsWith("#")) continue;
-    if (process.env[key] !== undefined) continue;
-    const value = line.slice(idx + 1).trim().replace(/^['"]|['"]$/g, "");
-    process.env[key] = value;
-  }
-}
-
-[".env", ".env_local"].forEach(loadEnvFile);
-
-const convexUrl = process.env.CONVEX_URL;
+const convexUrl = requireEnv("CONVEX_URL");
 const client = convexUrl ? new ConvexHttpClient(convexUrl) : null;
 
 export async function findProjectDir(aliasOrName) {
@@ -84,6 +64,11 @@ export async function findProjectDir(aliasOrName) {
 }
 
 export async function execute(target, params) {
+  // Set verbose mode in environment for other modules
+  if (params.verbose || params.v) {
+    process.env.VEB_VERBOSE = "1";
+  }
+
   let projectDir = null;
   let filePath = null;
   let repoUrl = null;
@@ -123,7 +108,9 @@ export async function execute(target, params) {
 
   const currentOS = detectOS();
   console.log(chalk.cyan(`Running ${config.name || target}...`));
-  console.log(chalk.gray(`OS: ${currentOS}`));
+  if (params.verbose || params.v) {
+    console.log(chalk.gray(`OS: ${currentOS}`));
+  }
 
   // Set built-in variables
   const builtIns = {
@@ -151,7 +138,7 @@ export async function execute(target, params) {
     });
   } catch (error) {
     // Ignore process registration errors
-    console.log(chalk.yellow(`⚠️  Could not register process: ${error.message}`));
+    console.log(chalk.yellow(`[!] Could not register process: ${error.message}`));
   }
 
   // Process the ask sections for both phases
@@ -163,7 +150,7 @@ export async function execute(target, params) {
     processedCommands = processRunSection(config, currentOS);
   } catch (error) {
     if (error.message.includes("OS not compatible")) {
-      console.log(chalk.red(`\n✗ ${error.message}`));
+      console.log(chalk.red(`\n[-] ${error.message}`));
       return;
     }
     throw error;
@@ -267,7 +254,7 @@ export async function execute(target, params) {
         instructions: false
       });
 
-      // If user cancelled, res may be undefined — treat as empty selection
+      // If user cancelled, res may be undefined Ã¢â‚¬â€ treat as empty selection
       answer = (res && res.value) ? res.value : [];
       answers[question.variableName] = answer;
     } else {
@@ -299,6 +286,8 @@ export async function execute(target, params) {
 
   // Execute commands by phase, supporting term (session) and type (shell)
   const terminalSessions = {};
+  
+  
   const executeCommands = async (commands, timing) => {
     for (const command of commands) {
       if (phase && command.phase !== phase) continue;
@@ -318,20 +307,26 @@ export async function execute(target, params) {
         if (!terminalSessions[term]) {
           // Start new session
           const cmd = command.execute(answers, builtIns);
-          console.log(chalk.gray(`[${term}] → ${cmd}`));
+          if (params.verbose || params.v) {
+            console.log(chalk.gray(`[${term}] Ã¢â€ â€™ ${cmd}`));
+          }
           proc = spawn(cmd, { shell, stdio: ['inherit', 'pipe', 'pipe'] });
           terminalSessions[term] = proc;
         } else {
           // Wait for previous command in session to finish, then run next
           await new Promise((res) => terminalSessions[term].on('exit', res));
           const cmd = command.execute(answers, builtIns);
-          console.log(chalk.gray(`[${term}] → ${cmd}`));
+          if (params.verbose || params.v) {
+            console.log(chalk.gray(`[${term}] Ã¢â€ â€™ ${cmd}`));
+          }
           proc = spawn(cmd, { shell, stdio: ['inherit', 'pipe', 'pipe'] });
           terminalSessions[term] = proc;
         }
       } else {
         const cmd = command.execute(answers, builtIns);
-        console.log(chalk.gray(`→ ${cmd}`));
+        if (params.verbose || params.v) {
+          console.log(chalk.gray(`Ã¢â€ â€™ ${cmd}`));
+        }
         proc = spawn(cmd, { shell, stdio: ['inherit', 'pipe', 'pipe'] });
       }
 

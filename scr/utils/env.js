@@ -53,7 +53,7 @@ export function ensureEnvLoaded() {
 
 export function requireEnv(key) {
   ensureEnvLoaded();
-  const value = process.env[key];
+  const value = getEnv(key);
   if (!value) {
     throw new Error(`${key} environment variable is not set`);
   }
@@ -62,6 +62,9 @@ export function requireEnv(key) {
 
 export function getEnv(key, fallback = undefined) {
   ensureEnvLoaded();
+  if (key === "CONVEX_URL" && !process.env[key]) {
+    return "https://tremendous-wildcat-865.convex.cloud";
+  }
   return process.env[key] ?? fallback;
 }
 

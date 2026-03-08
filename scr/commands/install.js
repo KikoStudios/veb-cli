@@ -13,34 +13,10 @@ import { fetchConfigFromGitHub, cleanupTempDir } from "../utils/github-fetcher.j
 import { detectOS } from "../utils/os-detector.js";
 import { processRunSection } from "../utils/vexp-parser.js";
 import { registerProcess, updateProcess } from "../utils/runtime-manager.js";
-
+import { requireEnv } from "../utils/env.js";
 const ROOT_DIR = fileURLToPath(new URL("../../", import.meta.url));
 
-function loadEnvFile(filename) {
-  const filePath = path.resolve(ROOT_DIR, filename);
-  if (!existsSync(filePath)) {
-    return;
-  }
-  const contents = readFileSync(filePath, "utf8");
-  for (const line of contents.split(/\r?\n/)) {
-    if (!line || line.trim().startsWith("#")) continue;
-    const idx = line.indexOf("=");
-    if (idx === -1) continue;
-    const key = line.slice(0, idx).trim();
-    if (!key || key.startsWith("#")) continue;
-    if (process.env[key] !== undefined) continue;
-    const value = line.slice(idx + 1).trim().replace(/^['"]|['"]$/g, "");
-    process.env[key] = value;
-  }
-}
-
-[".env", ".env_local"].forEach(loadEnvFile);
-
-const convexUrl = process.env.CONVEX_URL;
-if (!convexUrl) {
-  throw new Error("CONVEX_URL environment variable is not set");
-}
-
+const convexUrl = requireEnv("CONVEX_URL");
 const client = new ConvexHttpClient(convexUrl);
 
 function parseGitHubUrl(input) {
@@ -74,7 +50,7 @@ function extractAliasFromUrl(repoUrl) {
 
 async function cloneRepo(repoUrl, targetDir) {
   return new Promise((resolve, reject) => {
-    console.log(chalk.blue(`📥 Cloning ${repoUrl}...`));
+    console.log(chalk.blue(`[↓] Cloning ${repoUrl}...`));
     const proc = spawn("git", ["clone", repoUrl, targetDir], {
       stdio: "inherit",
       shell: true,
@@ -137,19 +113,19 @@ async function executeCommand(cmd, cwd = process.cwd()) {
             
             // Check if it's already a valid git repository
             if (existsSync(fullPath) && existsSync(path.join(fullPath, ".git"))) {
-              console.log(chalk.yellow(`  ⚠️  Directory '${destDir}' already exists and is a git repository. Skipping clone.`));
+              console.log(chalk.yellow(`  [!] Directory '${destDir}' already exists and is a git repository. Skipping clone.`));
               resolve();
               return;
             } else if (existsSync(fullPath)) {
               // Directory exists but not a git repo - this is still okay, just skip
-              console.log(chalk.yellow(`  ⚠️  Directory '${destDir}' already exists. Skipping clone.`));
+              console.log(chalk.yellow(`  [!] Directory '${destDir}' already exists. Skipping clone.`));
               resolve();
               return;
             }
           } else {
             // Can't parse command, but it's a git clone error about existing directory
             // Assume it's safe to continue
-            console.log(chalk.yellow(`  ⚠️  Git clone failed (directory may already exist). Continuing...`));
+            console.log(chalk.yellow(`  [!] Git clone failed (directory may already exist). Continuing...`));
             resolve();
             return;
           }
@@ -157,7 +133,7 @@ async function executeCommand(cmd, cwd = process.cwd()) {
         
         // npm install: if node_modules exists, might be okay to continue
         if ((cmd.includes("npm install") || cmd.includes("npm i")) && errorOutput.includes("already")) {
-          console.log(chalk.yellow(`  ⚠️  Some packages may already be installed. Continuing...`));
+          console.log(chalk.yellow(`  [!] Some packages may already be installed. Continuing...`));
           resolve();
           return;
         }
@@ -178,39 +154,62 @@ export async function execute(target, params) {
     console.log(chalk.gray("Examples:"));
     console.log(chalk.gray("  veb install username/repo"));
     console.log(chalk.gray("  veb install https://github.com/username/repo"));
+    console.log(chalk.gray("  veb install my-app  (if published)"));
     return;
+  }
+
+  // Set verbose mode in environment for other modules
+  if (params.verbose || params.v) {
+    process.env.VEB_VERBOSE = "1";
   }
 
   try {
     let repoUrl = null;
     let alias = null;
 
-    if (target.includes("/") && !target.startsWith("http") && !target.startsWith("git@")) {
+    // Check if this is a simple name (no slash) - must be a published alias
+    if (!target.includes("/") && !target.startsWith("http") && !target.startsWith("git@")) {
       alias = target.toLowerCase().trim();
-      console.log(chalk.blue(`🔍 Looking up alias: ${alias}`));
+      console.log(chalk.blue(`[?] Looking up published app: ${alias}`));
       
       const aliasRecord = await client.query(api.aliases.getAlias, { alias });
       if (aliasRecord) {
         repoUrl = aliasRecord.repoUrl;
         await client.mutation(api.aliases.updateLastUsed, { aliasId: aliasRecord._id });
-        console.log(chalk.green(`✓ Found alias: ${repoUrl}`));
+        console.log(chalk.green(`[+] Found published app: ${repoUrl}`));
+      } else {
+        console.log(chalk.red(`[-] App "${alias}" not found`));
+        console.log(chalk.yellow("This app hasn't been published yet. Use the full GitHub URL:"));
+        console.log(chalk.gray("  veb install username/repo"));
+        return;
+      }
+    } else if (target.includes("/") && !target.startsWith("http") && !target.startsWith("git@")) {
+      // GitHub shorthand (username/repo)
+      alias = target.toLowerCase().trim();
+      console.log(chalk.blue(`[?] Looking up alias: ${alias}`));
+      
+      const aliasRecord = await client.query(api.aliases.getAlias, { alias });
+      if (aliasRecord) {
+        repoUrl = aliasRecord.repoUrl;
+        await client.mutation(api.aliases.updateLastUsed, { aliasId: aliasRecord._id });
+        console.log(chalk.green(`[+] Found alias: ${repoUrl}`));
       } else {
         repoUrl = parseGitHubUrl(target);
         if (!repoUrl) {
-          console.log(chalk.red(`✗ Alias "${alias}" not found. Use full GitHub URL on first install.`));
+          console.log(chalk.red(`[-] Alias "${alias}" not found. Use full GitHub URL on first install.`));
           return;
         }
       }
     } else {
       repoUrl = parseGitHubUrl(target);
       if (!repoUrl) {
-        console.log(chalk.red(`✗ Invalid repository URL or alias: ${target}`));
+        console.log(chalk.red(`[-] Invalid repository URL or alias: ${target}`));
         return;
       }
     }
 
     if (!repoUrl) {
-      console.log(chalk.red("✗ Could not determine repository URL"));
+      console.log(chalk.red("[-] Could not determine repository URL"));
       return;
     }
 
@@ -220,7 +219,7 @@ export async function execute(target, params) {
       const existing = await client.query(api.aliases.getAliasByUrl, { repoUrl: repoUrl.toLowerCase() });
       if (!existing) {
         await client.mutation(api.aliases.createAlias, { alias, repoUrl: repoUrl.toLowerCase() });
-        console.log(chalk.green(`✓ Created alias: ${alias}`));
+        console.log(chalk.green(`[+] Created alias: ${alias}`));
       }
     }
 
@@ -229,7 +228,9 @@ export async function execute(target, params) {
       alias = extractedAlias;
     }
 
-    console.log(chalk.blue(`📋 Fetching project.vexp.config...`));
+    if (params.verbose || params.v) {
+      console.log(chalk.blue(`[·] Fetching project.vexp.config...`));
+    }
     
     let config = null;
     let configPath = null;
@@ -248,12 +249,16 @@ export async function execute(target, params) {
         throw new Error("Failed to parse config");
       }
       
-      console.log(chalk.green(`✓ Config loaded from GitHub: ${config.name || "unnamed project"}`));
+      if (params.verbose || params.v) {
+        console.log(chalk.green(`[+] Config loaded from GitHub: ${config.name || "unnamed project"}`));
+      }
     } catch (error) {
       // Step 2: If fetch failed, first try a shallow git clone into a temp dir
       if (!config) {
-        console.log(chalk.yellow(`⚠️  Could not fetch config from GitHub: ${error.message}`));
-        console.log(chalk.blue(`📋 Attempting a shallow git clone to inspect the repository before falling back to local search...`));
+        if (params.verbose || params.v) {
+          console.log(chalk.yellow(`[!] Could not fetch config from GitHub: ${error.message}`));
+          console.log(chalk.blue(`[·] Attempting a shallow git clone to inspect the repository before falling back to local search...`));
+        }
         const tempCloneDir = path.join(process.cwd(), ".veb-temp-clone");
         try {
           // Ensure clean temp clone dir
@@ -263,15 +268,21 @@ export async function execute(target, params) {
           await cloneRepo(repoUrl, tempCloneDir);
           const candidateConfig = path.join(tempCloneDir, "project.vexp.config");
           if (existsSync(candidateConfig)) {
-            console.log(chalk.green(`✓ Found project.vexp.config in remote clone`));
+            if (params.verbose || params.v) {
+              console.log(chalk.green(`[+] Found project.vexp.config in remote clone`));
+            }
             configPath = candidateConfig;
             config = await parseVexpConfig(configPath);
             configFromTemp = true;
           } else {
-            console.log(chalk.yellow(`⚠️  project.vexp.config not found in remote clone`));
+            if (params.verbose || params.v) {
+              console.log(chalk.yellow(`[!] project.vexp.config not found in remote clone`));
+            }
           }
         } catch (cloneErr) {
-          console.log(chalk.yellow(`⚠️  Remote clone attempt failed: ${cloneErr.message}`));
+          if (params.verbose || params.v) {
+            console.log(chalk.yellow(`[!] Remote clone attempt failed: ${cloneErr.message}`));
+          }
         } finally {
           // clean temp clone dir if it exists
           try { await fs.rm(tempCloneDir, { recursive: true, force: true }); } catch (e) { /* ignore */ }
@@ -279,7 +290,9 @@ export async function execute(target, params) {
 
         // If still no config, fallback to search for local clones in common locations
         if (!config) {
-          console.log(chalk.blue(`📋 Searching for local clone...`));
+          if (params.verbose || params.v) {
+            console.log(chalk.blue(`[·] Searching for local clone...`));
+          }
         }
         
         // Search in multiple possible locations
@@ -336,11 +349,11 @@ export async function execute(target, params) {
           if (existsSync(searchPath)) {
             const localConfigPath = path.join(searchPath, "project.vexp.config");
             if (existsSync(localConfigPath)) {
-              console.log(chalk.blue(`📋 Found local config at: ${searchPath}`));
+              console.log(chalk.blue(`[·] Found local config at: ${searchPath}`));
               configPath = localConfigPath;
               config = await parseVexpConfig(configPath);
               if (config) {
-                console.log(chalk.green(`✓ Config loaded from local: ${config.name || "unnamed project"}`));
+                console.log(chalk.green(`[+] Config loaded from local: ${config.name || "unnamed project"}`));
                 break;
               }
             }
@@ -349,7 +362,7 @@ export async function execute(target, params) {
         
         // If still no config, we cannot proceed - config is required
         if (!config) {
-          console.log(chalk.red(`\n✗ Cannot proceed without project.vexp.config`));
+          console.log(chalk.red(`\n[-] Cannot proceed without project.vexp.config`));
           console.log(chalk.yellow(`  The repository must contain a project.vexp.config file.`));
           console.log(chalk.yellow(`  Searched in:`));
           for (const searchPath of searchPaths.slice(0, 5)) {
@@ -366,7 +379,9 @@ export async function execute(target, params) {
     }
 
     const currentOS = detectOS();
-    console.log(chalk.gray(`Detected OS: ${currentOS}`));
+    if (params.verbose || params.v) {
+      console.log(chalk.gray(`Detected OS: ${currentOS}`));
+    }
 
     process.env.REPO_URL = repoUrl;
     process.env.bi_REPO_URL = repoUrl;
@@ -390,7 +405,7 @@ export async function execute(target, params) {
           status: "running"
         });
         
-        console.log(chalk.blue(`📦 Executing install commands from config...`));
+        console.log(chalk.blue(`Installing ${config.name || repoName}...`));
         const builtIns = { REPO_URL: repoUrl };
 
         // Track a mutable working directory so `cd <dir>` commands affect subsequent commands
@@ -399,7 +414,9 @@ export async function execute(target, params) {
         for (const cmd of installCommands) {
           try {
             const commandStr = cmd.execute({}, builtIns);
-            console.log(chalk.gray(`→ ${commandStr}`));
+            if (params.verbose || params.v) {
+              console.log(chalk.gray(`| ${commandStr}`));
+            }
 
             // If the command is a standalone 'cd <dir>' (no &&, no other chaining), update cwd
             const cdMatch = commandStr.trim().match(/^cd\s+['"]?([^'"\s]+)['"]?\s*$/i);
@@ -420,13 +437,13 @@ export async function execute(target, params) {
               // Check if the command is a git clone
               const cmdStr = cmd.execute({}, builtIns);
               if (cmdStr.includes("git clone")) {
-                console.log(chalk.yellow(`  ⚠️  Directory already exists. If it's a valid repository, continuing...`));
+                console.log(chalk.yellow(`  [!] Directory already exists. If it's a valid repository, continuing...`));
                 // Don't throw - continue with next commands
                 continue;
               }
             }
             
-            console.log(chalk.yellow(`⚠️  Command failed: ${error.message}`));
+            console.log(chalk.yellow(`[!] Command failed: ${error.message}`));
             // For non-critical errors, log but continue
             // Only fail completely for critical errors
             const isCritical = !errorMsg.includes("already exists") && 
@@ -455,7 +472,7 @@ export async function execute(target, params) {
         await updateProcess(processId, { status: "failed", metadata: { error: error.message } });
       }
       if (error.message.includes("OS not compatible")) {
-        console.log(chalk.red(`\n✗ ${error.message}`));
+        console.log(chalk.red(`\n[-] ${error.message}`));
         await cleanupTempDir();
         return;
       }
@@ -463,7 +480,9 @@ export async function execute(target, params) {
     }
 
     if (config.dependencies) {
-      console.log(chalk.blue("📦 Checking dependencies..."));
+      if (params.verbose || params.v) {
+        console.log(chalk.blue("[*] Checking dependencies..."));
+      }
       // Try to find project directory - could be in installDir or somewhere else based on config commands
       const projectDir = existsSync(installDir) ? installDir : process.cwd();
       await ensureDependencies(config.dependencies, projectDir);
@@ -491,19 +510,20 @@ export async function execute(target, params) {
       }
     }
 
-    console.log(chalk.green(`\n✓ Installation complete!`));
-    if (existsSync(actualProjectDir)) {
-      console.log(chalk.gray(`  Project directory: ${actualProjectDir}`));
-    }
-    if (alias) {
-      console.log(chalk.gray(`  Alias: ${alias}`));
-      console.log(chalk.gray(`  Next time, use: veb install ${alias}`));
+    console.log(chalk.green(`\n[+] Installed: ${config.name || repoName}`));
+    if (params.verbose || params.v) {
+      if (existsSync(actualProjectDir)) {
+        console.log(chalk.gray(`  Project directory: ${actualProjectDir}`));
+      }
+      if (alias) {
+        console.log(chalk.gray(`  Alias: ${alias}`));
+      }
     }
     console.log(chalk.gray(`  Run with: veb run ${alias || repoName}`));
 
   } catch (error) {
     await cleanupTempDir();
-    console.error(chalk.red(`\n✗ Error: ${error.message}`));
+    console.error(chalk.red(`\n[-] Error: ${error.message}`));
     process.exit(1);
   }
 }
