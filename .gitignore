@@ -4,6 +4,8 @@ cli.exe
 # output
 out
 dist
+bin/
+veb-*
 *.tgz
 
 # code coverage
