@@ -29,7 +29,7 @@ echo "This is a large file (~100MB), preparing download..."
 
 # Download to a temporary location
 TMP_FILE="/tmp/$BIN_NAME"
-curl -# -L "$LATEST_RELEASE_URL" -o "$TMP_FILE"
+curl -f -# -L "$LATEST_RELEASE_URL" -o "$TMP_FILE"
 
 if [ $? -ne 0 ]; then
     echo "Error: Failed to download the binary. Please check if the releases exist on GitHub."

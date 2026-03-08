@@ -21,15 +21,15 @@ if (-not (Test-Path -Path $installDir)) {
 }
 
 Write-Host "Downloading $binName from $latestReleaseUrl..."
-Write-Host "This is a large file (~120MB), preparing download..." -ForegroundColor Gray
+Write-Host "This is a large file (~120MB), please wait while it downloads..." -ForegroundColor Gray
 
 # Download to the installation directory
+$ProgressPreference = 'SilentlyContinue'
 try {
-    # Use curl.exe which is much faster than Invoke-WebRequest and has a nice progress bar
-    curl.exe -# -L $latestReleaseUrl -o $target
-    if ($LASTEXITCODE -ne 0) { throw "Download failed" }
+    Invoke-WebRequest -Uri $latestReleaseUrl -OutFile $target -UseBasicParsing
 } catch {
-    Write-Host "Error: Failed to download the binary. Please check if the releases exist on GitHub. ($LASTEXITCODE)" -ForegroundColor Red
+    Write-Host "Error: Failed to download the binary. Please check if the releases exist on GitHub." -ForegroundColor Red
+    if (Test-Path $target) { Remove-Item $target -Force }
     exit 1
 }
 
